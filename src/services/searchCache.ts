@@ -1,4 +1,3 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SearchResult } from './imageSearch';
 
 const PREFIX = 'search_cache_v1:';
@@ -9,7 +8,9 @@ interface CacheEntry {
   ts: number;
 }
 
-function key(query: string, provider: string): string {
+const store = typeof localStorage !== 'undefined' ? localStorage : null;
+
+function cacheKey(query: string, provider: string): string {
   return `${PREFIX}${provider}:${query.trim().toLowerCase()}`;
 }
 
@@ -17,12 +18,13 @@ export async function getCached(
   query: string,
   provider: string
 ): Promise<SearchResult[] | null> {
+  if (!store) return null;
   try {
-    const raw = await AsyncStorage.getItem(key(query, provider));
+    const raw = store.getItem(cacheKey(query, provider));
     if (!raw) return null;
     const entry: CacheEntry = JSON.parse(raw);
     if (Date.now() - entry.ts > TTL_MS) {
-      await AsyncStorage.removeItem(key(query, provider));
+      store.removeItem(cacheKey(query, provider));
       return null;
     }
     return entry.results;
@@ -36,32 +38,32 @@ export async function setCached(
   provider: string,
   results: SearchResult[]
 ): Promise<void> {
+  if (!store) return;
   try {
     const entry: CacheEntry = { results, ts: Date.now() };
-    await AsyncStorage.setItem(key(query, provider), JSON.stringify(entry));
+    store.setItem(cacheKey(query, provider), JSON.stringify(entry));
   } catch {
-    // storage full or unavailable — fail silently
+    // localStorage voll — still silently
   }
 }
 
 export async function clearCache(): Promise<number> {
+  if (!store) return 0;
   try {
-    const keys = await AsyncStorage.getAllKeys();
-    const cacheKeys = keys.filter((k) => k.startsWith(PREFIX));
-    await AsyncStorage.multiRemove(cacheKeys);
-    return cacheKeys.length;
+    const toDelete = Object.keys(store).filter((k) => k.startsWith(PREFIX));
+    toDelete.forEach((k) => store.removeItem(k));
+    return toDelete.length;
   } catch {
     return 0;
   }
 }
 
 export async function getCacheStats(): Promise<{ entries: number; sizeKB: number }> {
+  if (!store) return { entries: 0, sizeKB: 0 };
   try {
-    const keys = await AsyncStorage.getAllKeys();
-    const cacheKeys = keys.filter((k) => k.startsWith(PREFIX));
-    const pairs = await AsyncStorage.multiGet(cacheKeys);
-    const sizeBytes = pairs.reduce((sum, [, v]) => sum + (v?.length ?? 0), 0);
-    return { entries: cacheKeys.length, sizeKB: Math.round(sizeBytes / 1024) };
+    const keys = Object.keys(store).filter((k) => k.startsWith(PREFIX));
+    const sizeBytes = keys.reduce((sum, k) => sum + (store.getItem(k)?.length ?? 0), 0);
+    return { entries: keys.length, sizeKB: Math.round(sizeBytes / 1024) };
   } catch {
     return { entries: 0, sizeKB: 0 };
   }
