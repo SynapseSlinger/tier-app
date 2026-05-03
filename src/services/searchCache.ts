@@ -2,7 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SearchResult } from './imageSearch';
 
 const PREFIX = 'search_cache_v1:';
-const TTL_MS = 7 * 24 * 60 * 60 * 1000; // 1 Woche
+const TTL_MS = 90 * 24 * 60 * 60 * 1000; // 90 Tage
 
 interface CacheEntry {
   results: SearchResult[];
