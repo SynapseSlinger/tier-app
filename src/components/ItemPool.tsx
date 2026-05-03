@@ -1,4 +1,4 @@
-import { View, StyleSheet, Pressable, Text } from 'react-native';
+import { View, ScrollView, StyleSheet, Pressable, Text } from 'react-native';
 import { Item } from '../store/useTierStore';
 import { SURFACE, TEXT as TEXT_COLOR, TEXT_SECONDARY } from '../constants/colors';
 import DraggableItem from './DraggableItem';
@@ -41,7 +41,12 @@ export default function ItemPool({
           Ziehen → in Tier einordnen · Lang drücken → mehrere auswählen & verschieben
         </Text>
       )}
-      <View style={styles.pool}>
+      <ScrollView
+        style={styles.poolScroll}
+        contentContainerStyle={styles.pool}
+        showsVerticalScrollIndicator={false}
+        nestedScrollEnabled
+      >
         {items.map((item) => (
           <DraggableItem
             key={item.id}
@@ -57,17 +62,18 @@ export default function ItemPool({
         {items.length === 0 && !deleteMode && (
           <Text style={styles.emptyText}>Suche nach Bildern oder lade aus der Galerie</Text>
         )}
-      </View>
+      </ScrollView>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
+    flex: 1,
     backgroundColor: SURFACE,
     borderTopWidth: 1,
     borderTopColor: '#333',
-    paddingBottom: 20,
+    minHeight: 0,
   },
   header: {
     flexDirection: 'row',
@@ -88,9 +94,10 @@ const styles = StyleSheet.create({
     paddingVertical: 6, borderRadius: 6,
   },
   addText: { color: TEXT_COLOR, fontSize: 13, fontWeight: '600' },
+  poolScroll: { flex: 1 },
   pool: {
     flexDirection: 'row', flexWrap: 'wrap',
-    paddingHorizontal: 12, gap: 6, minHeight: 64,
+    paddingHorizontal: 12, paddingBottom: 20, gap: 6, minHeight: 64,
   },
   hint: {
     color: TEXT_SECONDARY, fontSize: 11, paddingHorizontal: 12,

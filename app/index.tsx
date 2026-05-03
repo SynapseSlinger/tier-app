@@ -104,24 +104,26 @@ export default function EditorScreen() {
         ))}
       </ScrollView>
 
-      {!deleteMode && tierList.unassignedPool.length > 0 && (
-        <Pressable style={styles.quickVoteButton} onPress={() => router.push('/quick-vote')}>
-          <Text style={styles.quickVoteText}>
-            Quick Vote ({tierList.unassignedPool.length})
-          </Text>
-        </Pressable>
-      )}
+      <View style={styles.poolArea}>
+        {!deleteMode && tierList.unassignedPool.length > 0 && (
+          <Pressable style={styles.quickVoteButton} onPress={() => router.push('/quick-vote')}>
+            <Text style={styles.quickVoteText}>
+              Quick Vote ({tierList.unassignedPool.length})
+            </Text>
+          </Pressable>
+        )}
 
-      <ItemPool
-        items={tierList.unassignedPool}
-        onDragEnd={handleDragEnd}
-        onAddPress={pickImage}
-        onSearchPress={() => router.push('/search')}
-        deleteMode={deleteMode}
-        selectedIds={selectedIds}
-        onLongPress={enterDeleteMode}
-        onItemPress={toggleSelectItem}
-      />
+        <ItemPool
+          items={tierList.unassignedPool}
+          onDragEnd={handleDragEnd}
+          onAddPress={pickImage}
+          onSearchPress={() => router.push('/search')}
+          deleteMode={deleteMode}
+          selectedIds={selectedIds}
+          onLongPress={enterDeleteMode}
+          onItemPress={toggleSelectItem}
+        />
+      </View>
 
       {deleteMode && (
         <View style={styles.deleteBar}>
@@ -173,7 +175,8 @@ export default function EditorScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: BG },
-  tiers: { flex: 1 },
+  tiers: { flex: 2, minHeight: 0 },
+  poolArea: { flex: 1, minHeight: 0 },
   quickVoteButton: {
     backgroundColor: '#4A90D9',
     marginHorizontal: 12, marginVertical: 8,
