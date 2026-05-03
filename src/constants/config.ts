@@ -1,13 +1,9 @@
-import Constants from 'expo-constants';
-
-const extra = Constants.expoConfig?.extra ?? {};
-
 export const SEARCH_CONFIG = {
   pixabay: {
-    apiKey: (extra.pixabayApiKey as string) ?? '',
+    apiKey: process.env.EXPO_PUBLIC_PIXABAY_API_KEY ?? '',
   },
   google: {
-    apiKey: (extra.googleApiKey as string) ?? '',
-    searchEngineId: (extra.googleSearchEngineId as string) ?? '',
+    apiKey: process.env.EXPO_PUBLIC_GOOGLE_API_KEY ?? '',
+    searchEngineId: process.env.EXPO_PUBLIC_GOOGLE_SEARCH_ENGINE_ID ?? '',
   },
 };
