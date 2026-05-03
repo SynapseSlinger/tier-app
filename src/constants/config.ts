@@ -5,4 +5,7 @@ export const SEARCH_CONFIG = {
   serper: {
     apiKey: process.env.EXPO_PUBLIC_SERPER_API_KEY ?? '',
   },
+  anthropic: {
+    apiKey: process.env.EXPO_PUBLIC_ANTHROPIC_API_KEY ?? '',
+  },
 };

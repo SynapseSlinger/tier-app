@@ -1,6 +1,7 @@
 import { SEARCH_CONFIG } from '../constants/config';
+import { getTopicList } from './claudeList';
 
-export type SearchProvider = 'pixabay' | 'serper';
+export type SearchProvider = 'pixabay' | 'serper' | 'smart';
 
 export interface SearchResult {
   id: string;
@@ -114,4 +115,43 @@ export async function searchImages(
 ): Promise<SearchResult[]> {
   if (provider === 'pixabay') return searchPixabay(query, page);
   return searchSerper(query, page);
+}
+
+// Holt von Claude eine vollständige Itemliste und sucht pro Item ein Bild.
+export async function smartSearch(
+  topic: string,
+  onProgress: (done: number, total: number, currentItem: string) => void
+): Promise<SearchResult[]> {
+  const items = await getTopicList(topic);
+  if (items.length === 0) throw new Error('Claude hat keine Items gefunden.');
+
+  onProgress(0, items.length, items[0]);
+
+  const results: SearchResult[] = [];
+  const CHUNK = 3; // 3 parallele Requests gleichzeitig
+
+  for (let i = 0; i < items.length; i += CHUNK) {
+    const chunk = items.slice(i, i + CHUNK);
+    const chunkResults = await Promise.allSettled(
+      chunk.map(async (itemName) => {
+        const query = `${itemName} ${topic}`;
+        const res = await searchSerper(query, 1);
+        const first = res[0];
+        if (!first) return null;
+        return {
+          ...first,
+          id: `smart_${itemName}_${first.id}`,
+          label: itemName,
+        } as SearchResult;
+      })
+    );
+
+    chunkResults.forEach((r) => {
+      if (r.status === 'fulfilled' && r.value) results.push(r.value);
+    });
+
+    onProgress(Math.min(i + CHUNK, items.length), items.length, items[i + CHUNK] ?? '');
+  }
+
+  return results;
 }

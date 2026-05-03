@@ -6,9 +6,17 @@ interface TierRowProps {
   tier: Tier;
   onDragEnd: (itemId: string, y: number) => void;
   onLayout?: (tierId: string, y: number, height: number) => void;
+  deleteMode?: boolean;
+  selectedIds?: Set<string>;
+  onLongPress?: (itemId: string) => void;
+  onItemPress?: (itemId: string) => void;
 }
 
-export default function TierRow({ tier, onDragEnd, onLayout }: TierRowProps) {
+export default function TierRow({
+  tier, onDragEnd, onLayout,
+  deleteMode = false, selectedIds = new Set(),
+  onLongPress, onItemPress,
+}: TierRowProps) {
   return (
     <View
       style={styles.row}
@@ -27,6 +35,10 @@ export default function TierRow({ tier, onDragEnd, onLayout }: TierRowProps) {
             itemId={item.id}
             uri={item.uri}
             onDragEnd={onDragEnd}
+            deleteMode={deleteMode}
+            selected={selectedIds.has(item.id)}
+            onLongPress={onLongPress}
+            onPress={onItemPress}
           />
         ))}
       </View>
@@ -42,21 +54,12 @@ const styles = StyleSheet.create({
     borderBottomColor: '#333',
   },
   label: {
-    width: 56,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: 8,
+    width: 56, justifyContent: 'center',
+    alignItems: 'center', paddingVertical: 8,
   },
-  labelText: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#000',
-  },
+  labelText: { fontSize: 18, fontWeight: '700', color: '#000' },
   items: {
-    flex: 1,
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    padding: 4,
-    gap: 4,
+    flex: 1, flexDirection: 'row',
+    flexWrap: 'wrap', padding: 4, gap: 4,
   },
 });

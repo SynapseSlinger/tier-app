@@ -1,20 +1,19 @@
 import { useState, useCallback } from 'react';
 import {
-  View,
-  Text,
-  TextInput,
-  FlatList,
-  Image,
-  Pressable,
-  StyleSheet,
-  ActivityIndicator,
+  View, Text, TextInput, FlatList, Image,
+  Pressable, StyleSheet, ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTierStore } from '../src/store/useTierStore';
-import { searchImages, SearchProvider, SearchResult } from '../src/services/imageSearch';
+import { searchImages, smartSearch, SearchProvider, SearchResult } from '../src/services/imageSearch';
 import { BG, SURFACE, TEXT as TEXT_COLOR, TEXT_SECONDARY, TIER_COLORS } from '../src/constants/colors';
 
 const AUTO_SELECT_COUNTS = [10, 20, 30, 50];
+const PROVIDERS: { key: SearchProvider; label: string }[] = [
+  { key: 'pixabay', label: '📷 Pixabay' },
+  { key: 'serper',  label: '🌐 Web' },
+  { key: 'smart',   label: '🤖 KI-Suche' },
+];
 
 export default function SearchScreen() {
   const router = useRouter();
@@ -29,6 +28,7 @@ export default function SearchScreen() {
   const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(false);
+  const [progress, setProgress] = useState<{ done: number; total: number; current: string } | null>(null);
 
   const handleSearch = useCallback(async () => {
     if (!query.trim()) return;
@@ -38,20 +38,33 @@ export default function SearchScreen() {
     setError(null);
     setPage(1);
     setHasMore(false);
+    setProgress(null);
+
     try {
-      const items = await searchImages(query.trim(), provider, 1);
-      setResults(items);
-      setHasMore(items.length >= 20);
-      if (items.length === 0) setError(`Nichts gefunden für "${query}"`);
+      if (provider === 'smart') {
+        setProgress({ done: 0, total: 1, current: 'Analysiere Thema...' });
+        const items = await smartSearch(query.trim(), (done, total, current) => {
+          setProgress({ done, total, current });
+        });
+        setResults(items);
+        setProgress(null);
+        if (items.length === 0) setError('Keine Bilder gefunden.');
+      } else {
+        const items = await searchImages(query.trim(), provider, 1);
+        setResults(items);
+        setHasMore(items.length >= 20);
+        if (items.length === 0) setError(`Nichts gefunden für "${query}"`);
+      }
     } catch (e: any) {
       setError(e.message ?? 'Suche fehlgeschlagen');
+      setProgress(null);
     } finally {
       setLoading(false);
     }
   }, [query, provider]);
 
   const handleLoadMore = useCallback(async () => {
-    if (loadingMore || !query.trim()) return;
+    if (loadingMore || !query.trim() || provider === 'smart') return;
     setLoadingMore(true);
     setError(null);
     const nextPage = page + 1;
@@ -59,8 +72,7 @@ export default function SearchScreen() {
       const items = await searchImages(query.trim(), provider, nextPage);
       setResults((prev) => {
         const existingIds = new Set(prev.map((r) => r.id));
-        const newItems = items.filter((r) => !existingIds.has(r.id));
-        return [...prev, ...newItems];
+        return [...prev, ...items.filter((r) => !existingIds.has(r.id))];
       });
       setPage(nextPage);
       setHasMore(items.length >= 20);
@@ -71,25 +83,21 @@ export default function SearchScreen() {
     }
   }, [query, provider, page, loadingMore]);
 
-  const toggleSelect = (id: string) => {
+  const toggleSelect = (id: string) =>
     setSelected((prev) => {
       const next = new Set(prev);
       next.has(id) ? next.delete(id) : next.add(id);
       return next;
     });
-  };
 
-  const autoSelectCount = (count: number) => {
-    const toSelect = results.slice(0, count).map((r) => r.id);
-    setSelected(new Set(toSelect));
-  };
+  const autoSelectCount = (count: number) =>
+    setSelected(new Set(results.slice(0, count).map((r) => r.id)));
 
   const selectAll = () => setSelected(new Set(results.map((r) => r.id)));
   const clearSelection = () => setSelected(new Set());
 
   const handleAddSelected = () => {
-    const toAdd = results.filter((r) => selected.has(r.id));
-    toAdd.forEach((r) => {
+    results.filter((r) => selected.has(r.id)).forEach((r) => {
       addItem({
         id: Date.now().toString() + Math.random().toString(36).slice(2),
         uri: r.uri,
@@ -114,30 +122,47 @@ export default function SearchScreen() {
             <Text style={styles.checkmarkText}>✓</Text>
           </View>
         )}
+        <View style={styles.labelBadge}>
+          <Text style={styles.labelText} numberOfLines={1}>{item.label}</Text>
+        </View>
       </Pressable>
     );
   };
 
   return (
     <View style={styles.container}>
+      {/* Provider Tabs */}
       <View style={styles.providerRow}>
-        {(['pixabay', 'serper'] as SearchProvider[]).map((p) => (
+        {PROVIDERS.map((p) => (
           <Pressable
-            key={p}
-            style={[styles.providerButton, provider === p && styles.providerButtonActive]}
-            onPress={() => setProvider(p)}
+            key={p.key}
+            style={[styles.providerButton, provider === p.key && styles.providerButtonActive]}
+            onPress={() => { setProvider(p.key); setResults([]); setError(null); }}
           >
-            <Text style={[styles.providerText, provider === p && styles.providerTextActive]}>
-              {p === 'pixabay' ? '📷 Pixabay' : '🌐 Web-Suche'}
+            <Text style={[styles.providerText, provider === p.key && styles.providerTextActive]}>
+              {p.label}
             </Text>
           </Pressable>
         ))}
       </View>
 
+      {provider === 'smart' && (
+        <View style={styles.smartHint}>
+          <Text style={styles.smartHintText}>
+            Gib eine Kategorie ein – KI erstellt die Liste und sucht pro Item ein Bild.
+          </Text>
+        </View>
+      )}
+
+      {/* Suchzeile */}
       <View style={styles.searchRow}>
         <TextInput
           style={styles.input}
-          placeholder="z.B. Tiere, Winx, TOTK Enemies..."
+          placeholder={
+            provider === 'smart'
+              ? 'z.B. TOTK Enemies, Winx Club, Tiere Afrikas...'
+              : 'z.B. Tiere, Winx, TOTK Enemies...'
+          }
           placeholderTextColor={TEXT_SECONDARY}
           value={query}
           onChangeText={setQuery}
@@ -145,11 +170,31 @@ export default function SearchScreen() {
           returnKeyType="search"
           autoFocus
         />
-        <Pressable style={styles.searchButton} onPress={handleSearch}>
-          <Text style={styles.searchButtonText}>Suchen</Text>
+        <Pressable style={styles.searchButton} onPress={handleSearch} disabled={loading}>
+          <Text style={styles.searchButtonText}>
+            {loading ? '...' : 'Suchen'}
+          </Text>
         </Pressable>
       </View>
 
+      {/* KI Fortschrittsanzeige */}
+      {progress && (
+        <View style={styles.progressBox}>
+          <View style={styles.progressBarOuter}>
+            <View
+              style={[
+                styles.progressBarInner,
+                { width: `${progress.total > 0 ? (progress.done / progress.total) * 100 : 0}%` },
+              ]}
+            />
+          </View>
+          <Text style={styles.progressText}>
+            {progress.done}/{progress.total} – {progress.current || 'Lade...'}
+          </Text>
+        </View>
+      )}
+
+      {/* Schnellauswahl */}
       {results.length > 0 && (
         <View style={styles.autoSelectBar}>
           <Text style={styles.autoSelectLabel}>Schnellauswahl:</Text>
@@ -177,7 +222,7 @@ export default function SearchScreen() {
         </View>
       )}
 
-      {loading && <ActivityIndicator style={styles.loader} color={TEXT_COLOR} size="large" />}
+      {loading && !progress && <ActivityIndicator style={styles.loader} color={TEXT_COLOR} size="large" />}
 
       {error && !loading && (
         <View style={styles.errorBox}>
@@ -192,21 +237,23 @@ export default function SearchScreen() {
         numColumns={3}
         contentContainerStyle={styles.grid}
         ListEmptyComponent={
-          !loading ? (
-            <Text style={styles.hint}>Stichwort eingeben und auf "Suchen" tippen</Text>
+          !loading && !progress ? (
+            <Text style={styles.hint}>
+              {provider === 'smart'
+                ? 'Kategorie eingeben – KI findet alle Items automatisch'
+                : 'Stichwort eingeben und auf "Suchen" tippen'}
+            </Text>
           ) : null
         }
         ListFooterComponent={
-          results.length > 0 ? (
+          results.length > 0 && hasMore && provider !== 'smart' ? (
             <View style={styles.footer}>
-              {hasMore && (
-                <Pressable style={styles.loadMoreButton} onPress={handleLoadMore} disabled={loadingMore}>
-                  {loadingMore
-                    ? <ActivityIndicator color="#fff" />
-                    : <Text style={styles.loadMoreText}>Mehr laden ({results.length} bisher)</Text>
-                  }
-                </Pressable>
-              )}
+              <Pressable style={styles.loadMoreButton} onPress={handleLoadMore} disabled={loadingMore}>
+                {loadingMore
+                  ? <ActivityIndicator color="#fff" />
+                  : <Text style={styles.loadMoreText}>Mehr laden ({results.length} bisher)</Text>
+                }
+              </Pressable>
             </View>
           ) : null
         }
@@ -225,23 +272,39 @@ export default function SearchScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: BG },
-  providerRow: { flexDirection: 'row', padding: 12, gap: 8 },
+  providerRow: { flexDirection: 'row', padding: 12, gap: 6 },
   providerButton: {
     flex: 1, paddingVertical: 8, borderRadius: 8,
     backgroundColor: SURFACE, alignItems: 'center',
     borderWidth: 1, borderColor: '#333',
   },
   providerButtonActive: { backgroundColor: '#4A90D9', borderColor: '#4A90D9' },
-  providerText: { color: TEXT_SECONDARY, fontWeight: '600', fontSize: 14 },
+  providerText: { color: TEXT_SECONDARY, fontWeight: '600', fontSize: 12 },
   providerTextActive: { color: '#fff' },
+  smartHint: {
+    marginHorizontal: 12, marginBottom: 8,
+    backgroundColor: '#1a2a3a', borderRadius: 8,
+    padding: 10, borderWidth: 1, borderColor: '#2a4a6a',
+  },
+  smartHintText: { color: '#7ab8f5', fontSize: 12, lineHeight: 17 },
   searchRow: { flexDirection: 'row', paddingHorizontal: 12, paddingBottom: 12, gap: 8 },
   input: {
     flex: 1, backgroundColor: SURFACE, color: TEXT_COLOR,
     borderRadius: 8, paddingHorizontal: 14, paddingVertical: 10,
     fontSize: 15, borderWidth: 1, borderColor: '#333',
   },
-  searchButton: { backgroundColor: '#4A90D9', paddingHorizontal: 16, borderRadius: 8, justifyContent: 'center' },
+  searchButton: {
+    backgroundColor: '#4A90D9', paddingHorizontal: 16,
+    borderRadius: 8, justifyContent: 'center', minWidth: 72, alignItems: 'center',
+  },
   searchButtonText: { color: '#fff', fontWeight: '700', fontSize: 14 },
+  progressBox: { marginHorizontal: 12, marginBottom: 10 },
+  progressBarOuter: {
+    height: 6, backgroundColor: '#333',
+    borderRadius: 3, overflow: 'hidden', marginBottom: 6,
+  },
+  progressBarInner: { height: '100%', backgroundColor: '#4A90D9', borderRadius: 3 },
+  progressText: { color: TEXT_SECONDARY, fontSize: 12 },
   autoSelectBar: {
     flexDirection: 'row', alignItems: 'center',
     paddingHorizontal: 12, paddingBottom: 10, gap: 8, flexWrap: 'wrap',
@@ -270,12 +333,17 @@ const styles = StyleSheet.create({
   },
   resultItemSelected: { borderColor: '#4A90D9' },
   resultImage: { width: '100%', height: '100%' },
+  labelBadge: {
+    position: 'absolute', bottom: 0, left: 0, right: 0,
+    backgroundColor: 'rgba(0,0,0,0.6)', paddingHorizontal: 3, paddingVertical: 2,
+  },
+  labelText: { color: '#fff', fontSize: 9, fontWeight: '600' },
   checkmark: {
     position: 'absolute', top: 4, right: 4, backgroundColor: '#4A90D9',
     borderRadius: 12, width: 24, height: 24, justifyContent: 'center', alignItems: 'center',
   },
   checkmarkText: { color: '#fff', fontWeight: '700', fontSize: 13 },
-  hint: { color: TEXT_SECONDARY, textAlign: 'center', marginTop: 60, fontSize: 14 },
+  hint: { color: TEXT_SECONDARY, textAlign: 'center', marginTop: 60, fontSize: 14, paddingHorizontal: 24 },
   errorBox: {
     marginHorizontal: 12, marginBottom: 8, backgroundColor: '#3a1a1a',
     borderRadius: 8, padding: 12, borderWidth: 1, borderColor: '#7f2020',

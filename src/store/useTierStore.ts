@@ -25,6 +25,7 @@ interface TierStore {
   tierList: TierList;
   addItem: (item: Item) => void;
   moveItem: (itemId: string, targetTierId: string | null) => void;
+  removeItems: (ids: string[]) => void;
   updateTier: (tierId: string, updates: Partial<Pick<Tier, 'title' | 'color'>>) => void;
   resetList: () => void;
 }
@@ -90,6 +91,21 @@ export const useTierStore = create<TierStore>((set) => ({
             tier.id === targetTierId ? { ...tier, items: [...tier.items, movedItem!] } : tier
           ),
           unassignedPool: newPool,
+        },
+      };
+    }),
+
+  removeItems: (ids) =>
+    set((state) => {
+      const idSet = new Set(ids);
+      return {
+        tierList: {
+          ...state.tierList,
+          unassignedPool: state.tierList.unassignedPool.filter((i) => !idSet.has(i.id)),
+          tiers: state.tierList.tiers.map((tier) => ({
+            ...tier,
+            items: tier.items.filter((i) => !idSet.has(i.id)),
+          })),
         },
       };
     }),
