@@ -36,6 +36,11 @@ export default function ItemPool({
           </View>
         )}
       </View>
+      {items.length > 0 && !deleteMode && (
+        <Text style={styles.hint}>
+          Ziehen → in Tier einordnen · Lang drücken → mehrere auswählen & verschieben
+        </Text>
+      )}
       <View style={styles.pool}>
         {items.map((item) => (
           <DraggableItem
@@ -86,6 +91,10 @@ const styles = StyleSheet.create({
   pool: {
     flexDirection: 'row', flexWrap: 'wrap',
     paddingHorizontal: 12, gap: 6, minHeight: 64,
+  },
+  hint: {
+    color: TEXT_SECONDARY, fontSize: 11, paddingHorizontal: 12,
+    paddingBottom: 6, lineHeight: 16,
   },
   emptyText: { color: TEXT_SECONDARY, fontSize: 13, paddingVertical: 16 },
 });

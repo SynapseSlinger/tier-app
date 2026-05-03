@@ -6,6 +6,7 @@ import {
 import { useRouter } from 'expo-router';
 import { useTierStore } from '../src/store/useTierStore';
 import { searchImages, smartSearch, SearchProvider, SearchResult } from '../src/services/imageSearch';
+import { isImageUsable } from '../src/services/imageCheck';
 import { BG, SURFACE, TEXT as TEXT_COLOR, TEXT_SECONDARY, TIER_COLORS } from '../src/constants/colors';
 
 const AUTO_SELECT_COUNTS = [10, 20, 30, 50];
@@ -29,6 +30,7 @@ export default function SearchScreen() {
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(false);
   const [progress, setProgress] = useState<{ done: number; total: number; current: string } | null>(null);
+  const [brokenIds, setBrokenIds] = useState<Set<string>>(new Set());
 
   const handleSearch = useCallback(async () => {
     if (!query.trim()) return;
@@ -39,6 +41,7 @@ export default function SearchScreen() {
     setPage(1);
     setHasMore(false);
     setProgress(null);
+    setBrokenIds(new Set());
 
     try {
       if (provider === 'smart') {
@@ -90,14 +93,22 @@ export default function SearchScreen() {
       return next;
     });
 
-  const autoSelectCount = (count: number) =>
-    setSelected(new Set(results.slice(0, count).map((r) => r.id)));
+  const markBroken = useCallback((id: string) => {
+    setBrokenIds((prev) => { const next = new Set(prev); next.add(id); return next; });
+    setSelected((prev) => { const next = new Set(prev); next.delete(id); return next; });
+  }, []);
 
-  const selectAll = () => setSelected(new Set(results.map((r) => r.id)));
+  const visibleResults = results.filter((r) => !brokenIds.has(r.id));
+  const allSelected = visibleResults.length > 0 && selected.size === visibleResults.length;
+
+  const autoSelectCount = (count: number) =>
+    setSelected(new Set(visibleResults.slice(0, count).map((r) => r.id)));
+
+  const selectAll = () => setSelected(new Set(visibleResults.map((r) => r.id)));
   const clearSelection = () => setSelected(new Set());
 
   const handleAddSelected = () => {
-    results.filter((r) => selected.has(r.id)).forEach((r) => {
+    visibleResults.filter((r) => selected.has(r.id)).forEach((r) => {
       addItem({
         id: Date.now().toString() + Math.random().toString(36).slice(2),
         uri: r.uri,
@@ -107,8 +118,6 @@ export default function SearchScreen() {
     router.back();
   };
 
-  const allSelected = results.length > 0 && selected.size === results.length;
-
   const renderItem = ({ item }: { item: SearchResult }) => {
     const isSelected = selected.has(item.id);
     return (
@@ -116,7 +125,14 @@ export default function SearchScreen() {
         style={[styles.resultItem, isSelected && styles.resultItemSelected]}
         onPress={() => toggleSelect(item.id)}
       >
-        <Image source={{ uri: item.uri }} style={styles.resultImage} />
+        <Image
+          source={{ uri: item.uri }}
+          style={styles.resultImage}
+          onError={() => markBroken(item.id)}
+          onLoad={() => {
+            isImageUsable(item.uri).then((ok) => { if (!ok) markBroken(item.id); });
+          }}
+        />
         {isSelected && (
           <View style={styles.checkmark}>
             <Text style={styles.checkmarkText}>✓</Text>
@@ -195,11 +211,11 @@ export default function SearchScreen() {
       )}
 
       {/* Schnellauswahl */}
-      {results.length > 0 && (
+      {visibleResults.length > 0 && (
         <View style={styles.autoSelectBar}>
           <Text style={styles.autoSelectLabel}>Schnellauswahl:</Text>
           <View style={styles.autoSelectButtons}>
-            {AUTO_SELECT_COUNTS.filter((n) => n <= results.length).map((n) => (
+            {AUTO_SELECT_COUNTS.filter((n) => n <= visibleResults.length).map((n) => (
               <Pressable
                 key={n}
                 style={[styles.countButton, selected.size === n && styles.countButtonActive]}
@@ -215,10 +231,13 @@ export default function SearchScreen() {
               onPress={allSelected ? clearSelection : selectAll}
             >
               <Text style={[styles.countButtonText, allSelected && styles.countButtonTextActive]}>
-                {allSelected ? 'Alle ab' : `Alle (${results.length})`}
+                {allSelected ? 'Alle ab' : `Alle (${visibleResults.length})`}
               </Text>
             </Pressable>
           </View>
+          {brokenIds.size > 0 && (
+            <Text style={styles.filteredNote}>({brokenIds.size} kaputte Bilder ausgeblendet)</Text>
+          )}
         </View>
       )}
 
@@ -231,7 +250,7 @@ export default function SearchScreen() {
       )}
 
       <FlatList
-        data={results}
+        data={visibleResults}
         keyExtractor={(item) => item.id}
         renderItem={renderItem}
         numColumns={3}
@@ -246,12 +265,12 @@ export default function SearchScreen() {
           ) : null
         }
         ListFooterComponent={
-          results.length > 0 && hasMore && provider !== 'smart' ? (
+          visibleResults.length > 0 && hasMore && provider !== 'smart' ? (
             <View style={styles.footer}>
               <Pressable style={styles.loadMoreButton} onPress={handleLoadMore} disabled={loadingMore}>
                 {loadingMore
                   ? <ActivityIndicator color="#fff" />
-                  : <Text style={styles.loadMoreText}>Mehr laden ({results.length} bisher)</Text>
+                  : <Text style={styles.loadMoreText}>Mehr laden ({visibleResults.length} bisher)</Text>
                 }
               </Pressable>
             </View>
@@ -310,6 +329,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12, paddingBottom: 10, gap: 8, flexWrap: 'wrap',
   },
   autoSelectLabel: { color: TEXT_SECONDARY, fontSize: 12, fontWeight: '600' },
+  filteredNote: { color: '#ff8080', fontSize: 11, marginTop: 4, width: '100%' },
   autoSelectButtons: { flexDirection: 'row', gap: 6, flexWrap: 'wrap' },
   countButton: {
     paddingHorizontal: 12, paddingVertical: 5, borderRadius: 20,
