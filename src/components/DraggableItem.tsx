@@ -90,8 +90,8 @@ export default function DraggableItem({
 }
 
 const styles = StyleSheet.create({
-  wrapper: { width: 56, height: 56 },
-  image: { width: 56, height: 56, borderRadius: 4 },
+  wrapper: { width: 56, height: 56, backgroundColor: '#111', borderRadius: 4 },
+  image: { width: 56, height: 56, borderRadius: 4, resizeMode: 'contain' },
   imageSelected: { opacity: 0.5 },
   badge: {
     position: 'absolute', top: 2, right: 2,

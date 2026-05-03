@@ -5,11 +5,11 @@ import * as ImagePicker from 'expo-image-picker';
 import { useTierStore } from '../src/store/useTierStore';
 import TierRow from '../src/components/TierRow';
 import ItemPool from '../src/components/ItemPool';
-import { BG, TEXT as TEXT_COLOR } from '../src/constants/colors';
+import { BG, TEXT as TEXT_COLOR, TEXT_SECONDARY } from '../src/constants/colors';
 
 export default function EditorScreen() {
   const router = useRouter();
-  const { tierList, addItem, moveItem, removeItems } = useTierStore();
+  const { tierList, addItem, moveItem, moveItems, removeItems } = useTierStore();
   const tierLayouts = useRef<Record<string, { y: number; height: number }>>({});
   const scrollOffset = useRef(0);
 
@@ -125,27 +125,46 @@ export default function EditorScreen() {
 
       {deleteMode && (
         <View style={styles.deleteBar}>
-          <Pressable style={styles.cancelButton} onPress={cancelDeleteMode}>
-            <Text style={styles.cancelText}>Abbrechen</Text>
-          </Pressable>
-          <Pressable
-            style={[styles.deleteButton, selectedIds.size === 0 && styles.deleteButtonDisabled]}
-            onPress={handleDelete}
-            disabled={selectedIds.size === 0}
-          >
-            <Text style={styles.deleteText}>
-              🗑 {selectedIds.size > 0 ? `${selectedIds.size} löschen` : 'Auswählen'}
+          <View style={styles.deleteBarTop}>
+            <Pressable style={styles.cancelButton} onPress={cancelDeleteMode}>
+              <Text style={styles.cancelText}>Abbrechen</Text>
+            </Pressable>
+            <Text style={styles.selectionCount}>
+              {selectedIds.size > 0 ? `${selectedIds.size} ausgewählt` : 'Tippen zum Auswählen'}
             </Text>
-          </Pressable>
-          <Pressable style={styles.selectAllButton} onPress={() => {
-            const allIds = [
-              ...tierList.unassignedPool.map((i) => i.id),
-              ...tierList.tiers.flatMap((t) => t.items.map((i) => i.id)),
-            ];
-            setSelectedIds(new Set(allIds));
-          }}>
-            <Text style={styles.selectAllText}>Alle ({totalItems})</Text>
-          </Pressable>
+            <Pressable style={styles.selectAllButton} onPress={() => {
+              const allIds = [
+                ...tierList.unassignedPool.map((i) => i.id),
+                ...tierList.tiers.flatMap((t) => t.items.map((i) => i.id)),
+              ];
+              setSelectedIds(new Set(allIds));
+            }}>
+              <Text style={styles.selectAllText}>Alle ({totalItems})</Text>
+            </Pressable>
+          </View>
+          <View style={styles.deleteBarBottom}>
+            {tierList.tiers.map((tier) => (
+              <Pressable
+                key={tier.id}
+                style={[styles.tierMoveButton, { backgroundColor: tier.color }, selectedIds.size === 0 && styles.tierMoveButtonDisabled]}
+                disabled={selectedIds.size === 0}
+                onPress={() => {
+                  moveItems(Array.from(selectedIds), tier.id);
+                  setDeleteMode(false);
+                  setSelectedIds(new Set());
+                }}
+              >
+                <Text style={styles.tierMoveText}>→ {tier.title}</Text>
+              </Pressable>
+            ))}
+            <Pressable
+              style={[styles.deleteButton, selectedIds.size === 0 && styles.deleteButtonDisabled]}
+              onPress={handleDelete}
+              disabled={selectedIds.size === 0}
+            >
+              <Text style={styles.deleteText}>🗑</Text>
+            </Pressable>
+          </View>
         </View>
       )}
     </View>
@@ -162,26 +181,33 @@ const styles = StyleSheet.create({
   },
   quickVoteText: { color: TEXT_COLOR, fontSize: 15, fontWeight: '700' },
   deleteBar: {
-    flexDirection: 'row',
     backgroundColor: '#1a1a1a',
     borderTopWidth: 1,
     borderTopColor: '#333',
     padding: 10,
     gap: 8,
   },
+  deleteBarTop: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 2 },
+  deleteBarBottom: { flexDirection: 'row', gap: 6 },
+  selectionCount: { flex: 1, color: TEXT_SECONDARY, fontSize: 13, textAlign: 'center' },
   cancelButton: {
-    flex: 1, paddingVertical: 12, borderRadius: 8,
+    paddingVertical: 8, paddingHorizontal: 12, borderRadius: 8,
     backgroundColor: '#333', alignItems: 'center',
   },
-  cancelText: { color: TEXT_COLOR, fontWeight: '600', fontSize: 14 },
+  cancelText: { color: TEXT_COLOR, fontWeight: '600', fontSize: 13 },
+  tierMoveButton: {
+    flex: 1, paddingVertical: 10, borderRadius: 8, alignItems: 'center',
+  },
+  tierMoveButtonDisabled: { opacity: 0.4 },
+  tierMoveText: { color: '#000', fontWeight: '700', fontSize: 12 },
   deleteButton: {
-    flex: 2, paddingVertical: 12, borderRadius: 8,
-    backgroundColor: '#cc2222', alignItems: 'center',
+    paddingVertical: 10, paddingHorizontal: 14, borderRadius: 8,
+    backgroundColor: '#cc2222', alignItems: 'center', justifyContent: 'center',
   },
   deleteButtonDisabled: { backgroundColor: '#551111' },
-  deleteText: { color: '#fff', fontWeight: '700', fontSize: 14 },
+  deleteText: { color: '#fff', fontWeight: '700', fontSize: 16 },
   selectAllButton: {
-    flex: 1, paddingVertical: 12, borderRadius: 8,
+    paddingVertical: 8, paddingHorizontal: 12, borderRadius: 8,
     backgroundColor: '#333', alignItems: 'center',
   },
   selectAllText: { color: TEXT_COLOR, fontWeight: '600', fontSize: 13 },

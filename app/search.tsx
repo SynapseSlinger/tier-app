@@ -330,9 +330,10 @@ const styles = StyleSheet.create({
   resultItem: {
     flex: 1, margin: 3, aspectRatio: 1, borderRadius: 6,
     overflow: 'hidden', borderWidth: 2, borderColor: 'transparent',
+    backgroundColor: '#111',
   },
   resultItemSelected: { borderColor: '#4A90D9' },
-  resultImage: { width: '100%', height: '100%' },
+  resultImage: { width: '100%', height: '100%', resizeMode: 'contain' },
   labelBadge: {
     position: 'absolute', bottom: 0, left: 0, right: 0,
     backgroundColor: 'rgba(0,0,0,0.6)', paddingHorizontal: 3, paddingVertical: 2,
