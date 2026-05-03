@@ -1,5 +1,6 @@
 import { SEARCH_CONFIG } from '../constants/config';
 import { getTopicList } from './claudeList';
+import { getCached, setCached } from './searchCache';
 
 export type SearchProvider = 'pixabay' | 'serper' | 'smart';
 
@@ -112,9 +113,20 @@ export async function searchImages(
   query: string,
   provider: SearchProvider,
   page = 1
-): Promise<SearchResult[]> {
-  if (provider === 'pixabay') return searchPixabay(query, page);
-  return searchSerper(query, page);
+): Promise<{ results: SearchResult[]; hit: boolean }> {
+  if (provider === 'pixabay') {
+    return { results: await searchPixabay(query, page), hit: false };
+  }
+
+  // Cache nur für Seite 1
+  if (page === 1) {
+    const cached = await getCached(query, provider);
+    if (cached) return { results: cached, hit: true };
+    const results = await searchSerper(query, page);
+    if (results.length > 0) await setCached(query, provider, results);
+    return { results, hit: false };
+  }
+  return { results: await searchSerper(query, page), hit: false };
 }
 
 // Holt von Claude eine vollständige Itemliste und sucht pro Item ein Bild.
@@ -134,8 +146,13 @@ export async function smartSearch(
     const chunk = items.slice(i, i + CHUNK);
     const chunkResults = await Promise.allSettled(
       chunk.map(async (itemName) => {
-        const query = `${itemName} ${topic}`;
-        const res = await searchSerper(query, 1);
+        const q = `${itemName} ${topic}`;
+        const cached = await getCached(q, 'smart');
+        const res = cached ?? await (async () => {
+          const fresh = await searchSerper(q, 1);
+          if (fresh.length > 0) await setCached(q, 'smart', fresh);
+          return fresh;
+        })();
         const first = res[0];
         if (!first) return null;
         return {

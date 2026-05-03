@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import {
   View, Text, TextInput, FlatList, Image,
   Pressable, StyleSheet, ActivityIndicator,
@@ -7,6 +7,7 @@ import { useRouter } from 'expo-router';
 import { useTierStore } from '../src/store/useTierStore';
 import { searchImages, smartSearch, SearchProvider, SearchResult } from '../src/services/imageSearch';
 import { isImageUsable } from '../src/services/imageCheck';
+import { clearCache, getCacheStats } from '../src/services/searchCache';
 import { BG, SURFACE, TEXT as TEXT_COLOR, TEXT_SECONDARY, TIER_COLORS } from '../src/constants/colors';
 
 const AUTO_SELECT_COUNTS = [10, 20, 30, 50];
@@ -31,6 +32,12 @@ export default function SearchScreen() {
   const [hasMore, setHasMore] = useState(false);
   const [progress, setProgress] = useState<{ done: number; total: number; current: string } | null>(null);
   const [brokenIds, setBrokenIds] = useState<Set<string>>(new Set());
+  const [cacheStats, setCacheStats] = useState<{ entries: number; sizeKB: number } | null>(null);
+  const [fromCache, setFromCache] = useState(false);
+
+  useEffect(() => {
+    getCacheStats().then(setCacheStats);
+  }, []);
 
   const handleSearch = useCallback(async () => {
     if (!query.trim()) return;
@@ -42,6 +49,7 @@ export default function SearchScreen() {
     setHasMore(false);
     setProgress(null);
     setBrokenIds(new Set());
+    setFromCache(false);
 
     try {
       if (provider === 'smart') {
@@ -53,10 +61,12 @@ export default function SearchScreen() {
         setProgress(null);
         if (items.length === 0) setError('Keine Bilder gefunden.');
       } else {
-        const items = await searchImages(query.trim(), provider, 1);
+        const { results: items, hit } = await searchImages(query.trim(), provider, 1);
         setResults(items);
+        setFromCache(hit);
         setHasMore(items.length >= 20);
         if (items.length === 0) setError(`Nichts gefunden für "${query}"`);
+        if (hit) getCacheStats().then(setCacheStats);
       }
     } catch (e: any) {
       setError(e.message ?? 'Suche fehlgeschlagen');
@@ -72,7 +82,7 @@ export default function SearchScreen() {
     setError(null);
     const nextPage = page + 1;
     try {
-      const items = await searchImages(query.trim(), provider, nextPage);
+      const { results: items } = await searchImages(query.trim(), provider, nextPage);
       setResults((prev) => {
         const existingIds = new Set(prev.map((r) => r.id));
         return [...prev, ...items.filter((r) => !existingIds.has(r.id))];
@@ -162,6 +172,25 @@ export default function SearchScreen() {
         ))}
       </View>
 
+      {/* Cache-Info */}
+      {cacheStats !== null && (provider === 'serper' || provider === 'smart') && (
+        <View style={styles.cacheBar}>
+          <Text style={styles.cacheInfo}>
+            Cache: {cacheStats.entries} Einträge · {cacheStats.sizeKB} KB
+          </Text>
+          <Pressable
+            style={styles.cacheClearButton}
+            onPress={async () => {
+              await clearCache();
+              const stats = await getCacheStats();
+              setCacheStats(stats);
+            }}
+          >
+            <Text style={styles.cacheClearText}>Cache leeren</Text>
+          </Pressable>
+        </View>
+      )}
+
       {provider === 'smart' && (
         <View style={styles.smartHint}>
           <Text style={styles.smartHintText}>
@@ -235,6 +264,9 @@ export default function SearchScreen() {
               </Text>
             </Pressable>
           </View>
+          {fromCache && (
+            <Text style={styles.cacheHitBadge}>⚡ Aus Cache geladen</Text>
+          )}
           {brokenIds.size > 0 && (
             <Text style={styles.filteredNote}>({brokenIds.size} kaputte Bilder ausgeblendet)</Text>
           )}
@@ -330,6 +362,18 @@ const styles = StyleSheet.create({
   },
   autoSelectLabel: { color: TEXT_SECONDARY, fontSize: 12, fontWeight: '600' },
   filteredNote: { color: '#ff8080', fontSize: 11, marginTop: 4, width: '100%' },
+  cacheHitBadge: { color: '#4CAF50', fontSize: 11, marginTop: 4, width: '100%' },
+  cacheBar: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 12, paddingVertical: 6,
+    backgroundColor: '#0f1f0f', borderBottomWidth: 1, borderBottomColor: '#1a3a1a',
+  },
+  cacheInfo: { color: '#4CAF50', fontSize: 11 },
+  cacheClearButton: {
+    paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6,
+    backgroundColor: '#1a3a1a', borderWidth: 1, borderColor: '#2a5a2a',
+  },
+  cacheClearText: { color: '#4CAF50', fontSize: 11, fontWeight: '600' },
   autoSelectButtons: { flexDirection: 'row', gap: 6, flexWrap: 'wrap' },
   countButton: {
     paddingHorizontal: 12, paddingVertical: 5, borderRadius: 20,
