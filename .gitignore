@@ -33,8 +33,7 @@ yarn-error.*
 # local env files
 .env*.local
 
-# API Keys - never commit!
-src/constants/config.ts
+# config.ts liest nur aus Env-Vars, wird committed
 
 # typescript
 *.tsbuildinfo
